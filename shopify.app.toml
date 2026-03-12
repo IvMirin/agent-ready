@@ -1,0 +1,15 @@
+client_id = "89bc2a3d456de61150ce71210f14dd2a"
+name = "asr-agentic-sales-rep"
+application_url = "https://asr-agentic-sales-rep.gadget.app/api/shopify/install-or-render"
+embedded = true
+
+[auth]
+redirect_urls = [ "https://asr-agentic-sales-rep.gadget.app/api/connections/auth/shopify/callback" ]
+
+[webhooks]
+api_version = "2025-01"
+
+[[webhooks.subscriptions]]
+compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+uri = "https://asr-agentic-sales-rep.gadget.app/api/webhooks/shopify"
+topics = [ "shop/update", "app/uninstalled" ]
