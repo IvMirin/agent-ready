@@ -1,26 +1,24 @@
 import { useState, useCallback } from "react";
 import { useFindMany, useAction } from "@gadgetinc/react";
 import {
-  Badge,
-  Banner,
-  BlockStack,
-  Box,
-  Button,
-  Card,
-  EmptyState,
-  InlineStack,
-  Layout,
-  Page,
-  Select,
-  Spinner,
-  Text,
-  Tooltip,
+  Badge, Banner, BlockStack, Box, Button, Card, EmptyState,
+  InlineStack, Layout, Page, Select, Spinner, Text, Tooltip,
 } from "@shopify/polaris";
 import { api } from "../api";
 
+// Top AI search models as of March 2026
+const AI_AGENTS = [
+  { label: "Perplexity Sonar Large 3.1 — strict AEO check", value: "Perplexity" },
+  { label: "SearchGPT / ChatGPT Shopping (GPT-4o) — medium", value: "SearchGPT" },
+  { label: "Google Gemini 2.0 Flash Shopping — medium", value: "GeminiShopping" },
+  { label: "Microsoft Copilot Shopping (GPT-4o Turbo) — medium", value: "CopilotShopping" },
+  { label: "Amazon AI Nova Pro — strict", value: "AmazonNovaPro" },
+  { label: "Claude Sonnet 3.7 (Anthropic) — strict", value: "ClaudeSonnet" },
+];
+
 function humanFailReason(reason: string | null | undefined): string | null {
   const map: Record<string, string> = {
-    MISSING_WEIGHT: "Missing product weight",
+    MISSING_WEIGHT: "Missing weight",
     MISSING_DIMENSIONS: "Missing dimensions",
     MISSING_MATERIAL: "Missing material",
     MISSING_VARIANT_ID: "Missing Shopify variant",
@@ -36,8 +34,7 @@ const statusTone = (s: string | null | undefined) => {
   if (s === "HARD_FAIL") return "critical" as const;
   return undefined;
 };
-
-const statusLabel = (s: string | null | undefined): string => {
+const statusLabel = (s: string | null | undefined) => {
   if (s === "PASS") return "✓ Will buy";
   if (s === "SOFT_FAIL") return "⚠ Will skip";
   if (s === "HARD_FAIL") return "✗ Blocked";
@@ -48,164 +45,100 @@ export default function Simulator() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("Perplexity");
 
-  const [{ data: products, fetching: prodFetching }] = useFindMany(
-    api.shopifyProduct,
-    {
-      first: 250,
-      select: { id: true, title: true, isAgentReady: true },
-    }
-  );
+  const [{ data: products, fetching: prodFetching }] = useFindMany(api.shopifyProduct, {
+    first: 250,
+    select: { id: true, title: true, isAgentReady: true, agenticScore: true },
+  });
 
-  const [{ data: simulations, fetching: simFetching, error }] = useFindMany(
-    api.a2ASimulation,
-    {
-      first: 50,
-      sort: { createdAt: "Descending" },
-      select: {
-        id: true,
-        agentType: true,
-        resultStatus: true,
-        failureReason: true,
-        autoReoptimized: true,
-        createdAt: true,
-        product: { id: true, title: true },
-      },
-    }
-  );
+  const [{ data: simulations, fetching: simFetching, error }] = useFindMany(api.a2ASimulation, {
+    first: 50,
+    sort: { createdAt: "Descending" },
+    select: {
+      id: true, agentType: true, resultStatus: true, failureReason: true,
+      autoReoptimized: true, createdAt: true,
+      product: { id: true, title: true },
+    },
+  });
 
-  const [{ fetching: running }, runSimulation] = useAction(
-    api.a2ASimulation.runSimulation
-  );
+  const [{ fetching: running }, runSimulation] = useAction(api.a2ASimulation.runSimulation);
 
   const handleRun = useCallback(async () => {
     if (!selectedProductId) return;
     await runSimulation({
-      a2ASimulation: {
-        product: { _link: selectedProductId },
-        agentType: selectedAgent,
-      },
+      a2ASimulation: { product: { _link: selectedProductId }, agentType: selectedAgent },
     });
   }, [selectedProductId, selectedAgent, runSimulation]);
 
   const productOptions = [
     { label: "Select a product...", value: "" },
     ...(products ?? []).map((p) => ({
-      label: `${p.isAgentReady ? "🟢" : "🔴"} ${p.title ?? p.id}`,
+      label: `${p.isAgentReady ? "🟢" : (p.agenticScore ?? 0) >= 40 ? "🟡" : "🔴"} ${p.title ?? p.id}`,
       value: p.id,
     })),
   ];
 
   return (
     <Page
-      title="Check: will AI buy your product?"
-      subtitle="Simulating a purchase through Perplexity, SearchGPT and other AI agents"
+      title="A2A Simulator"
+      subtitle="Test how top AI search models evaluate and purchase your products (March 2026)"
     >
       <Layout>
-        {/* Run form */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <BlockStack gap="100">
-                <Text as="h2" variant="headingMd">
-                  Run a check
-                </Text>
+                <Text as="h2" variant="headingMd">Run a simulation</Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  GPT-4o simulates purchasing your product just like a real AI
-                  agent would. If we find an issue — we fix it automatically.
+                  AEO Engine v2 evaluates your product through the selected AI search model.
+                  If it fails — it triggers auto-fix automatically.
                 </Text>
               </BlockStack>
 
-              {prodFetching ? (
-                <Spinner size="small" />
-              ) : (
-                <Select
-                  label="Product"
-                  options={productOptions}
-                  value={selectedProductId}
-                  onChange={setSelectedProductId}
-                />
+              {prodFetching ? <Spinner size="small" /> : (
+                <Select label="Product" options={productOptions}
+                  value={selectedProductId} onChange={setSelectedProductId} />
               )}
 
               <Select
-                label="Which AI search engine to check?"
-                options={[
-                  { label: "Perplexity — strict check", value: "Perplexity" },
-                  { label: "SearchGPT — medium check", value: "SearchGPT" },
-                  {
-                    label: "Gemini Shopping — medium check",
-                    value: "GeminiShopping",
-                  },
-                  {
-                    label: "GPT-4o Agent — maximum strictness",
-                    value: "GPT4Agent",
-                  },
-                ]}
+                label="AI search model (March 2026)"
+                options={AI_AGENTS}
                 value={selectedAgent}
                 onChange={setSelectedAgent}
               />
 
-              <Button
-                variant="primary"
-                onClick={handleRun}
-                loading={running}
-                disabled={!selectedProductId}
-              >
-                Run check
+              <Button variant="primary" onClick={handleRun}
+                loading={running} disabled={!selectedProductId}>
+                ▶ Run simulation
               </Button>
             </BlockStack>
           </Card>
         </Layout.Section>
 
-        {/* Results */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <BlockStack gap="100">
-                <Text as="h2" variant="headingMd">
-                  Check history
-                </Text>
+                <Text as="h2" variant="headingMd">Simulation history</Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  ✓ Will buy — AI can purchase · ✗ Blocked — insufficient data
+                  ✓ Will buy — passes AEO threshold · ✗ Blocked — needs optimization
                 </Text>
               </BlockStack>
 
-              {error && (
-                <Banner tone="critical">
-                  <Text as="p" variant="bodyMd">{error.message}</Text>
-                </Banner>
-              )}
+              {error && <Banner tone="critical"><Text as="p" variant="bodyMd">{error.message}</Text></Banner>}
 
               {simFetching && !simulations ? (
-                <Box padding="400">
-                  <BlockStack gap="200" inlineAlign="center">
-                    <Spinner size="large" />
-                  </BlockStack>
-                </Box>
+                <Box padding="400"><BlockStack gap="200" inlineAlign="center"><Spinner size="large" /></BlockStack></Box>
               ) : (simulations?.length ?? 0) === 0 ? (
-                <EmptyState heading="No checks yet" image="">
-                  <Text as="p" variant="bodyMd">
-                    Select a product above and run your first check.
-                  </Text>
+                <EmptyState heading="No simulations yet" image="">
+                  <Text as="p" variant="bodyMd">Select a product and run your first simulation.</Text>
                 </EmptyState>
               ) : (
                 <BlockStack gap="300">
                   {(simulations ?? []).map((sim) => {
-                    const reason = humanFailReason(
-                      sim.failureReason as string | null | undefined
-                    );
+                    const reason = humanFailReason(sim.failureReason as string | null | undefined);
                     return (
-                      <Box
-                        key={sim.id}
-                        padding="300"
-                        borderWidth="025"
-                        borderColor="border"
-                        borderRadius="200"
-                      >
-                        <InlineStack
-                          align="space-between"
-                          blockAlign="center"
-                          gap="400"
-                        >
+                      <Box key={sim.id} padding="300" borderWidth="025" borderColor="border" borderRadius="200">
+                        <InlineStack align="space-between" blockAlign="center" gap="400">
                           <BlockStack gap="100">
                             <Text as="span" variant="bodyMd" fontWeight="semibold">
                               {sim.product?.title ?? "—"}
@@ -216,17 +149,13 @@ export default function Simulator() {
                           </BlockStack>
                           <InlineStack gap="200" wrap={false}>
                             <Badge>{sim.agentType ?? "—"}</Badge>
-                            <Badge tone={statusTone(sim.resultStatus)}>
-                              {statusLabel(sim.resultStatus)}
-                            </Badge>
+                            <Badge tone={statusTone(sim.resultStatus)}>{statusLabel(sim.resultStatus)}</Badge>
                             {reason && (
                               <Tooltip content={sim.failureReason ?? ""}>
-                                <Badge tone="critical">{reason}</Badge>
+                                <Badge tone="warning">{reason}</Badge>
                               </Tooltip>
                             )}
-                            {sim.autoReoptimized && (
-                              <Badge tone="info">Auto-fixed</Badge>
-                            )}
+                            {sim.autoReoptimized && <Badge tone="info">Auto-fixed</Badge>}
                           </InlineStack>
                         </InlineStack>
                       </Box>
